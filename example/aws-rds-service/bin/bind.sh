@@ -29,7 +29,7 @@ if [ -z "$INSTANCE_ID" ] ; then
 	exit 1;
 fi
 
-USER=$(jq -r ".authUser" aws-rds-service-broker.json)
+USER=$(jq -r ".authUser" config/aws-rds-service-broker.json)
 PWD=$(jq -r ".authPassword" config/aws-rds-service-broker.json)
 
 curl http://$USER:$PWD@$HOST/v2/service_instances/$INSTANCE_ID/service_bindings/$BINDING_ID \

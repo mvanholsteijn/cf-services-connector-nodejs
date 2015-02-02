@@ -195,7 +195,7 @@ function DbInstanceParameterFilter(params) {
 
 
 function generateInstanceId(prefix) {
-    return prefix.concat('-').concat((Math.floor(Date.now() / 100, 0).toString(16)));
+    return prefix.concat('-').concat((Math.floor(Date.now() / 100).toString(16)));
 }
 
 function createDashboardUrl(params) {
@@ -268,12 +268,14 @@ broker.on('provision', function (req, next) {
 
 broker.on('unprovision', function (req, next) {
     getAllDbInstances(new DbInstanceIdFilter(req.params.id), function (err, dbInstances) {
-        var dbinstance = dbInstances[0],
+        var dbinstance, params;
+
+        if (!err && dbInstances && dbInstances.length > 0) {
+	    dbinstance = dbInstances[0],
             params = {
                 DBInstanceIdentifier: dbinstance.DBInstanceIdentifier
             };
 
-        if (!err) {
             if (dbInstances && dbInstances.length > 0) {
                 if (dbinstance.DBInstanceStatus !== "creating") {
                     params.FinalDBSnapshotIdentifier = ('Final-snapshot-' + dbinstance.DBInstanceIdentifier);
@@ -295,7 +297,11 @@ broker.on('unprovision', function (req, next) {
                 next();
             }
         } else {
-            throw new Error(err);
+	    if (!err) {
+                throw new Error("instance no longer exists");
+            } else {
+	        throw new Error(err);
+            }
         }
     });
 });
@@ -304,28 +310,27 @@ broker.on('unprovision', function (req, next) {
 broker.on('bind', function (req, next) {
     var reply = {};
 
-    getAllDbInstances(new DbInstanceIdFilter(req.params.instance_id), function (err, dbInstances) {
-        var i = 0,
-            dbinstance = null,
-            tag = null;
+    getAllDbInstances(new DbInstanceIdFilter(req.params.instance_id), function (err, allDatabaseInstances) {
+        var i = 0, instance = null, tag = null;
+        
         if (!err) {
-            if (dbInstances && dbInstances.length > 0) {
-                dbinstance = dbInstances[0];
-                if (dbinstance && dbinstance.Endpoint) {
+            if (allDatabaseInstances && allDatabaseInstances.length > 0) {
+                instance = allDatabaseInstances[0];
+                if (instance && instance.Endpoint) {
                     reply.credentials = {
-                        'host': dbinstance.Endpoint.Address,
-                        'username': dbinstance.MasterUsername,
-                        'port': dbinstance.Endpoint.Port
+                        'host': instance.Endpoint.Address,
+                        'username': instance.MasterUsername,
+                        'port': instance.Endpoint.Port
                     };
-                    for (i = 0; i < dbinstance.TagList.length; i += 1) {
-                        tag = dbinstance.TagList[i];
+                    for (i = 0; i < instance.TagList.length; i += 1) {
+                        tag = instance.TagList[i];
                         if (tag.Key === 'CF-AWS-PASSWORD') {
                             reply.credentials.password = tag.Value;
                         }
                     }
                     next(reply);
                 } else {
-                    throw new Error("No endpoint set on the instance '" + dbinstance.DBInstanceIdentifier + "'. The instance is in state '" + dbinstance.DBInstanceStatus + "'.");
+                    throw new Error("No endpoint set on the instance '" + instance.DBInstanceIdentifier + "'. The instance is in state '" + instance.DBInstanceStatus + "'.");
                 }
             } else {
                 throw new Error("database instance has been deleted.");
