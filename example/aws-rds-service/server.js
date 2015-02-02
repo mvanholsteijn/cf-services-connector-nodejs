@@ -209,9 +209,9 @@ function createDashboardUrl(params) {
 }
 
 function createRds(req, plan, next) {
-    var reply = {},
-        params = JSON.parse(JSON.stringify(plan));
+    var reply = {}, params = null;
 
+    params = JSON.parse(JSON.stringify(plan));
     params.DBInstanceIdentifier = generateInstanceId(plan.DBInstanceIdentifier);
     params.MasterUserPassword = generatePassword(12);
     params.DBSubnetGroupName = Config.aws.DBSubnetGroupName;
@@ -267,35 +267,30 @@ broker.on('provision', function (req, next) {
 });
 
 broker.on('unprovision', function (req, next) {
-    getAllDbInstances(new DbInstanceIdFilter(req.params.id), function (err, dbInstances) {
-        var dbinstance, params;
+    getAllDbInstances(new DbInstanceIdFilter(req.params.id), function (err, allMatchingInstances) {
+        var instance, params;
 
-        if (!err && dbInstances && dbInstances.length > 0) {
-	    dbinstance = dbInstances[0],
+        if (!err && allMatchingInstances && allMatchingInstances.length > 0) {
+            instance = allMatchingInstances[0];
             params = {
-                DBInstanceIdentifier: dbinstance.DBInstanceIdentifier
+                DBInstanceIdentifier: instance.DBInstanceIdentifier
             };
 
-            if (dbInstances && dbInstances.length > 0) {
-                if (dbinstance.DBInstanceStatus !== "creating") {
-                    params.FinalDBSnapshotIdentifier = ('Final-snapshot-' + dbinstance.DBInstanceIdentifier);
-                    params.SkipFinalSnapshot = false;
-                } else {
-                    params.SkipFinalSnapshot = true;
-                }
-
-                rds.deleteDBInstance(params, function (err, rdsResponse) {
-                    if (!err) {
-                        console.log(rdsResponse);
-                        next();
-                    } else {
-                        throw new Error(err);
-                    }
-                });
+            if (instance.DBInstanceStatus !== "creating") {
+                params.FinalDBSnapshotIdentifier = ('Final-snapshot-' + instance.DBInstanceIdentifier);
+                params.SkipFinalSnapshot = false;
             } else {
-                console.log("warning: service id not in database.");
-                next();
+                params.SkipFinalSnapshot = true;
             }
+
+            rds.deleteDBInstance(params, function (err, rdsResponse) {
+                if (!err) {
+                    console.log(rdsResponse);
+                    next();
+                } else {
+                    throw new Error(err);
+                }
+            });
         } else {
 	    if (!err) {
                 throw new Error("instance no longer exists");
